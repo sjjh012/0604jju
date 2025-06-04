@@ -15,6 +15,7 @@ st.title("대장암 환자의 생존일수 예측과 시각화")
 xgb_model = joblib.load("model/xgb_model.pkl")
 scaler = joblib.load("model/scaler.pkl")
 with open("model/continual_col.json", "r") as f:
+    continual_col = json.load(f)  # 🔧 수정된 부분
 
 # ✅ 탭 구성
 탭 = st.tabs(["🧪 생존일수 예측", "📊 모델 성능 비교", "📈 예측 vs 실제", "🔍 변수 중요도"])
