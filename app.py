@@ -1,25 +1,34 @@
+# ✅ 필수 라이브러리 임포트
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import joblib
+import xgboost as xgb
+import lightgbm as lgb
 
-# ✅ 페이지 기본 설정
-st.set_page_config(page_title="대장암 생존 통계 및 모델 해석", layout="wide")
+# ✅ 페이지 설정
+st.set_page_config(page_title="대장암 생존 통계 및 예측 모델 분석", layout="wide")
 st.title("🧬 대장암 생존 통계 및 예측 모델 분석")
 
-# ✅ 데이터 불러오기 (train_selected_complete.csv가 있어야 함)
+# ✅ 데이터 및 모델 불러오기
 df = pd.read_csv("train_selected_complete.csv")
+xgb_model = joblib.load("xgb_model (1).pkl")
+lgb_model = joblib.load("lgb_model (1).pkl")
+input_scaler = joblib.load("input_scaler.pkl")
+target_scaler = joblib.load("target_scaler.pkl")
 
 # ✅ 탭 구성
 tabs = st.tabs([
     "📊 모델 성능 비교",
     "📌 변수 중요도",
     "🧍 유사 환자 통계",
-    "📈 생존 경향 시나리오",
-    "🧬 주요 유전자별 생존일수 비교"
+    "📝 생존일수 예측",
+    "📈 생존 경향 시나리오"
 ])
 
-# 🔹 탭 1: 모델 성능 비교
+# 🔹 탭 0: 모델 성능 비교
 with tabs[0]:
     st.subheader("📊 모델 성능 비교 (XGBoost vs LightGBM)")
     metrics = {
@@ -73,9 +82,9 @@ with tabs[0]:
         ax3.text(width + 0.02, y, f"{width:.3f}", va='center', fontsize=9)
     st.pyplot(fig3)
 
-# 🔹 탭 2: 변수 중요도 (예시)
+# 🔹 탭 1: 변수 중요도
 with tabs[1]:
-    st.subheader("📌 변수 중요도 (예시 값)")
+    st.subheader("📌 변수 중요도 ")
     importance_dict = {
         "Weight": 549.0,
         "Height": 485.0,
@@ -98,7 +107,7 @@ with tabs[1]:
         ax4.text(width + 10, y, f"{width:.1f}", va='center', fontsize=10)
     st.pyplot(fig4)
 
-# 🔹 탭 3: 유사 환자 통계
+# 🔹 탭 2: 유사 환자 통계
 with tabs[2]:
     st.subheader("🧍 Similar Patient Statistics")
     age_input = st.number_input("Age", min_value=0, max_value=100, value=60)
@@ -125,8 +134,86 @@ with tabs[2]:
     else:
         st.info("No similar patients found.")
 
-# 🔹 탭 4: 생존 경향 시나리오
+# 🔹 탭 3: 생존일수 예측
 with tabs[3]:
+    st.subheader("📝 환자 정보 입력")
+    data = {}
+    data["나이"] = st.number_input("나이", 0, 120, 60)
+    data["키"] = st.number_input("키", 100, 220, 165)
+    data["체중"] = st.number_input("체중", 30, 150, 60)
+    data["음주종류"] = st.selectbox("음주 종류", [0, 1, 2, 3, 4])
+    data["흡연여부"] = st.radio("흡연 여부", [0, 1], format_func=lambda x: "X" if x == 0 else "O")
+
+    for col in ["대장암수술여부", "항암제치료여부", "방사선치료여부"]:
+        data[col] = st.radio(col, [0, 1], format_func=lambda x: "X" if x == 0 else "O")
+
+    for gene in ["EGFR", "MSI", "KRAS", "NRAS", "BRAF"]:
+        data[gene] = st.selectbox(f"{gene} 돌연변이 여부", [0, 1], format_func=lambda x: "X" if x == 0 else "O")
+
+    # ✅ 병기: One-hot 방식 선택
+    stage_options = ["T1", "T2", "T3", "T4", "N1", "N2", "N3", "M1", "Tis"]
+    selected_stage = st.selectbox("병기 선택", stage_options)
+    for stage in stage_options:
+        data[stage] = int(stage == selected_stage)
+
+    # ✅ 조직학적 진단명: One-hot 방식 선택
+    hist_features = {
+        "adenocarcinoma": "adenocarcinoma",
+        "mucinous": "mucinous",
+        "signet ring cell": "signet_ring_cell",
+        "squamous cell carcinoma": "squamous_cell_carcinoma",
+        "Neoplasm malignant": "Neoplasm_malignant",
+        "carcinoide tumor": "carcinoide_tumor",
+        "Neuroendocrine carcinoma": "Neuroendocrine_carcinoma"
+    }
+    selected_hist = st.selectbox("조직학적 진단명 선택", list(hist_features.keys()))
+    for label, var_name in hist_features.items():
+        data[var_name] = int(label == selected_hist)
+
+    model_choice = st.selectbox("모델 선택", ["XGBoost", "LightGBM"])
+
+    if st.button("예측 실행"):
+        try:
+            input_df = pd.DataFrame([data])
+
+            if model_choice == "XGBoost":
+                model = xgb_model
+                model_features = model.get_booster().feature_names
+            else:
+                model = lgb_model
+                model_features = model.booster_.feature_name()
+
+            for col in model_features:
+                if col not in input_df.columns:
+                    input_df[col] = 0
+            input_df = input_df[model_features]
+
+            # ✅ 입력 스케일링
+            for col in input_scaler.feature_names_in_:
+                if col not in input_df.columns:
+                    input_df[col] = 0
+            scaler_input = input_df[input_scaler.feature_names_in_]
+            scaled_array = input_scaler.transform(scaler_input)
+            scaled_df = pd.DataFrame(scaled_array, columns=input_scaler.feature_names_in_)
+
+            for col in input_df.columns:
+                if col not in scaled_df.columns:
+                    scaled_df[col] = input_df[col]
+
+            input_for_model = scaled_df[model_features]
+
+            # ✅ 예측 및 타겟 역변환
+            pred_scaled_log = model.predict(input_for_model)
+            pred_log = target_scaler.inverse_transform(np.array(pred_scaled_log).reshape(-1, 1))[0][0]
+            pred_days = np.expm1(pred_log)
+
+            st.success(f"✅ 예측된 생존일수: {pred_days:.1f}일")
+
+        except Exception as e:
+            st.error(f"❌ 예측 중 오류 발생: {e}")
+
+# 🔹 탭 4: 생존 경향 시나리오
+with tabs[4]:
     st.subheader("📈 Survival Scenario Trends")
     scenario = st.selectbox("Select Scenario", ["No Treatment", "Surgery Only", "Surgery + Chemo"])
     if scenario == "No Treatment":
@@ -146,37 +233,3 @@ with tabs[3]:
         st.pyplot(fig6)
     else:
         st.info("No patients found for this scenario.")
-
-# 🔹 탭 5: 유전자별 생존일수 비교
-with tabs[4]:
-    st.subheader("🧬 주요 유전자별 생존일수 비교 (KRAS, BRAF, EGFR, MSI)")
-
-    gene_map = {
-        "KRAS": "KRAS",
-        "BRAF": "BRAF_MUTATION",
-        "EGFR": "EGFR",
-        "MSI": "MSI"
-    }
-
-    for gene_name, gene_col in gene_map.items():
-        st.markdown(f"### 🔹 {gene_name} 돌연변이 상태별 생존일수 분포")
-
-        if gene_col not in df.columns:
-            st.warning(f"⚠️ {gene_name} 컬럼이 존재하지 않습니다.")
-            continue
-
-        df_gene = df[df[gene_col] != 99]
-        groups = sorted(df_gene[gene_col].unique())
-        survival_data = [df_gene[df_gene[gene_col] == g]["Survival"] for g in groups]
-        group_labels = [f"{gene_name}={g}" for g in groups]
-
-        for g, surv in zip(groups, survival_data):
-            st.write(f"• {gene_name} = {g} → 환자 수: {len(surv)}명, 평균 생존일수: {surv.mean():.0f}일, 중앙값: {surv.median():.0f}일")
-
-        fig, ax = plt.subplots()
-        ax.boxplot(survival_data, labels=group_labels)
-        ax.set_title(f"Survival Days by {gene_name} Status")
-        ax.set_ylabel("Survival Days")
-        st.pyplot(fig)
-
-        st.markdown("---")
