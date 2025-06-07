@@ -219,7 +219,7 @@ with tabs[4]:
     # 시나리오 선택
     scenario = st.selectbox("Select Scenario", ["No Treatment", "Surgery Only", "Surgery + Chemo"])
 
-    # 시나리오별 조건 필터링
+    # 시나리오 조건 필터링
     if scenario == "No Treatment":
         subset = df[(df["Surgery"] == 0) & (df["Chemo"] == 0)]
     elif scenario == "Surgery Only":
@@ -227,7 +227,7 @@ with tabs[4]:
     elif scenario == "Surgery + Chemo":
         subset = df[(df["Surgery"] == 1) & (df["Chemo"] == 1)]
 
-    # 인원 수 출력
+    # 환자 수 출력
     st.write(f"🧪 Number of patients in scenario: {len(subset)}")
 
     if len(subset) > 0:
@@ -238,12 +238,12 @@ with tabs[4]:
         st.write(f"📊 Mean Survival Days: {mean_val:.0f} days")
         st.write(f"📊 Median Survival Days: {median_val:.0f} days")
 
-        # 박스플롯 시각화
+        # 박스플롯 그리기 (tick_labels 사용)
         fig6, ax6 = plt.subplots()
-        ax6.boxplot(subset["Survival"], labels=[scenario])
+        ax6.boxplot(subset["Survival"], tick_labels=[scenario])
         ax6.set_title("Survival Days by Treatment Scenario")
 
-        # 선 없이 텍스트만 색상 구분하여 표시
+        # 색상으로 평균/중앙값 텍스트 표시 (선 없이)
         ax6.text(1.1, mean_val, f"Mean: {mean_val:.0f}", color='blue', va='center', fontsize=10)
         ax6.text(1.1, median_val, f"Median: {median_val:.0f}", color='green', va='center', fontsize=10)
 
