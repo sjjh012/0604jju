@@ -32,11 +32,11 @@ tabs = st.tabs([
 with tabs[0]:
     st.subheader("📊 모델 성능 비교 (XGBoost vs LightGBM)")
     metrics = {
-        "MAE": [0.95, 0.95],
-        "RMSE": [1.27, 1.27],
+        "MAE": [0.92, 0.95],
+        "RMSE": [1.24, 1.27],
         "Pearson": [-0.000, -0.003],
         "Spearman": [-0.018, -0.008],
-        "CI": [0.543, 0.497]
+        "CI": [0.545, 0.497]
     }
     df_result = pd.DataFrame(metrics, index=["XGBoost", "LightGBM"])
 
